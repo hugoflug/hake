@@ -1,6 +1,3 @@
-{-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE LambdaCase #-}
-
 module Hake where
 
 import Language.Haskell.Interpreter
@@ -39,7 +36,7 @@ desugar = \case
 
 splitIn2 :: Text -> Text -> Maybe (Text, Text)
 splitIn2 s t = case splitOn s t of
-  [fst, snd] -> Just (fst, snd)
+  [fstHalf, sndHalf] -> Just (fstHalf, sndHalf)
   _ -> Nothing 
 
 desugarNoJson :: [Text] -> Maybe Value
@@ -55,7 +52,7 @@ run = do
   (cmd, cmdArgs) <- case args of
     [] -> exit "No command specified"
     [_] -> exit "No arguments specified" 
-    cmd:args -> pure (cmd, args)
+    cmd:cmdArgs -> pure (cmd, cmdArgs)
   result <- runInterpreter $ do
     setImports ["Data.Aeson"]
     set [languageExtensions := [DeriveGeneric, DeriveAnyClass]]
