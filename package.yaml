@@ -1,21 +1,20 @@
 name:                hake
 version:             0.1.0.0
 
+default-extensions:
+  - OverloadedStrings
+  - LambdaCase
+
 ghc-options: 
-- -Wall
-- -fno-warn-name-shadowing
-- -fno-warn-missing-signatures 
-- -fno-warn-unused-do-bind 
-- -Werror=incomplete-patterns
+  - -Wall
+  - -Werror=incomplete-patterns
 
 dependencies:
-- base >= 4.7 && < 5
-- template-haskell
-- text
-- aeson
-- bytestring
-- either
-- hint
+  - base >= 4.7 && < 5
+  - aeson
+  - bytestring
+  - hint
+  - text
 
 library:
   source-dirs: src
@@ -25,16 +24,17 @@ executables:
     main:                Main.hs
     source-dirs:         app
     dependencies:
-    - hake
+      - hake
+    ghc-options: 
+      - -threaded
+      - -rtsopts
+      - -with-rtsopts=-N
+      - -O2
 
 tests:
   hake-test:
     main:                Spec.hs
     source-dirs:         test
-    ghc-options:
-    - -threaded
-    - -rtsopts
-    - -with-rtsopts=-N
     dependencies:
     - hake
     - aeson
