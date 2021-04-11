@@ -39,6 +39,7 @@ deploy cmd = do
   callCommand $ "echo deploying: " <> show cmd
 
 ```
+This Hakefile defines a single command, `deploy`.
 
 To define a command, just define a top-level function with a single argument, which must be an instance of `FromJSON`.
 
@@ -51,7 +52,7 @@ Commands in the Hakefile can now be called using JSON syntax:
 deploying: Deploy {service = Service foo-service, environment = EuProduction, version = Version 2af667b}
 ```
 
-They can also be called with a more CLI-friendly syntax:
+They can also be called with a more CLI-friendly sugared syntax:
 
 ```
 > hake deploy service=foo-service environment=EuProduction version=2af667b
@@ -79,3 +80,9 @@ GHC must be installed to run `hake`, and Aeson must be available on `GHC_PACKAGE
 Any other external libraries used in your Hakefile must also be available on `GHC_PACKAGE_PATH`.
 
 Hakefiles currently must use the module name "Hakefile", so Hakefiles can't import other Hakefiles.
+
+## TODO
+
+- No-argument commands
+- Specifying custom Haskell module names (e.g. `hake -m MyModule somecommand`)
+- Extend sugared syntax (Supporting Int/Bools and non-records)
