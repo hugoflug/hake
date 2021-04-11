@@ -57,7 +57,7 @@ run = do
     [_] -> exit "No arguments specified" 
     cmd:args -> pure (cmd, args)
   result <- runInterpreter $ do
-    setImports ["Data.Aeson", "Data.Aeson.Types"] -- TODO: how are these loaded?
+    setImports ["Data.Aeson"]
     set [languageExtensions := [DeriveGeneric, DeriveAnyClass]]
 
     -- TODO: support alternative module names
@@ -66,9 +66,10 @@ run = do
     interpretCommand cmd
 
   case result of
-    Left (WontCompile errs) ->
-      traverse_ (putStrLn . errMsg) errs
-    Left err -> error $ show err
+    Left (WontCompile errs) -> do
+      putStrLn $ "Errors in evaluated module(s):"
+      traverse_ (putStrLn . errMsg) errs -- TODO: why are errors duplicated?
+    Left err -> exit $ pack $ show err
     Right runCmd -> do
       decodedArg <- case desugar cmdArgs of
         Nothing -> exit "Invalid argument syntax"

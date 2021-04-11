@@ -1,56 +1,81 @@
-Configuration:
+# Hake
+Easily run Haskell functions from your command line. 
+
+Replace your Makefiles with Hakefiles and reap the benefits of a full, statically typed programming language.
+
+All you need is a `Hakefile`:
+
 ```haskell
-#! /usr/bin/hake
+module Hakefile where
+
+import GHC.Generics (Generic)
+import System.Process (callCommand)
+import Data.Aeson
 
 newtype Service = 
   Service String
-  deriving Generic
+  deriving (Generic, FromJSON, Show)
+
+newtype Version =
+  Version String
+  deriving (Generic, FromJSON, Show)
 
 data Environment =
   EuStaging |
   UsStaging |
   EuProduction |
   UsProduction 
-  deriving Generic
+  deriving (Generic, FromJSON, Show)
 
 data Deploy =
   Deploy {
     service :: Service,
     environment :: Environment,
     version :: Version
-  } deriving Generic
+  } deriving (Generic, FromJSON, Show)
 
 deploy :: Deploy -> IO ()
 deploy cmd = do
-  callCommand "echo fire the missiles!"
+  callCommand $ "echo deploying: " <> show cmd
 
 ```
 
-Usage examples:
+To define a command, just define a top-level function with a single argument, which must be an instance of `FromJSON`.
+
+`DeriveGeneric` and `DeriveAnyClass` are available in Hakefiles, so a default `FromJSON` can be derived by just adding `deriving (Generic, FromJSON)` to your data type. If custom JSON deserialization is desired, just define a manual instance of `FromJSON`.
+
+Commands in the Hakefile can now be called using JSON syntax:
 
 ```
-> hake deploy service=foo-service environment=eu-production version=2af667b
-fire the missiles!
+> hake deploy '{ "service": "product-service", "environment": "EuProduction", "version": "2af667b" }'
+deploying: Deploy {service = Service foo-service, environment = EuProduction, version = Version 2af667b}
 ```
 
+They can also be called with a more CLI-friendly syntax:
 
 ```
-> hake deploy service=foo-service environment=eu-production
-Missing argument: 'version'
+> hake deploy service=foo-service environment=EuProduction version=2af667b
+deploying: Deploy {service = Service foo-service, environment = EuProduction, version = Version 2af667b}
+```
+
+Missing or invalid keys will result in validation errors:
+
+```
+> hake deploy service=foo-service environment=EuProduction
+Error: key "version" not present
 ```
 
 ```
-> hake deploy service=foo-service environment=eur-production
-Invalid argument: 'environment=eur-production'
-Expected one of: 'eu-staging', 'us-staging', 'eu-production', 'us-production'
+> hake deploy service=foo-service environment=EuProd
+Error: The key "EuProd" was not found
 ```
 
-Argument is either JSON, or CLI-sugared JSON, i.e.
-a=b c=5 === { "a": "b", "c":"5" }
+Hakefiles are just Haskell, so other Haskell modules can be imported and used.
 
-1. Lookup function name based on command name
-2. Desugar argument
-3. Parse argument as JSON
-4. Call function with argument
+## Caveats
 
-Use hint for interpreting Haskell?
+GHC must be installed to run `hake`, and Aeson must be available on `GHC_PACKAGE_PATH`.
+
+Any other external libraries used in your Hakefile must also be available on `GHC_PACKAGE_PATH`.
+
+Hakefiles currently must use the module name "Hakefile", so Hakefiles can't import other Hakefiles.
