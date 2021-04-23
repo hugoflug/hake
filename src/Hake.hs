@@ -11,28 +11,23 @@ import Data.Text (Text, unpack, pack, splitOn)
 import Data.Text.Encoding (encodeUtf8)
 import Data.Typeable (Typeable)
 
--- TODO: switch to getArgs from unix package?
-getArgsText :: IO [Text]
-getArgsText = fmap pack <$> getArgs
+data Command =
+  NoArgs (IO ()) |
+  WithArgs (Value -> Result (IO ()))
 
 interpretText :: (MonadInterpreter m, Typeable a) => Text -> a -> m a
 interpretText t w = interpret (unpack t) w
 
-decodeText :: Text -> Maybe Value
-decodeText = decode . fromStrict . encodeUtf8
+interpretCommand :: Text -> [Text] -> Text -> IO (Either InterpreterError Command)
+interpretCommand cmd args moduleName = runInterpreter $ do
+  setImports ["Data.Aeson"]
+  set [languageExtensions := [DeriveGeneric, DeriveAnyClass]]
 
-interpretCommand :: MonadInterpreter m => Text -> m (Value -> (Result (IO ())))
-interpretCommand command = 
-  interpretText ("fmap " <> command <> ". fromJSON") infer
-
-desugar :: [Text] -> Maybe Value
-desugar = \case
-  [arg] ->
-    case decodeText arg of
-      Just value -> Just value
-      Nothing -> desugarNoJson [arg]
-  args ->
-    desugarNoJson args
+  loadModules [unpack moduleName]
+  setTopLevelModules [unpack moduleName] 
+  case args of
+    [] -> NoArgs <$> interpretText cmd infer
+    _ -> WithArgs <$> interpretText ("fmap " <> cmd <> ". fromJSON") infer
 
 splitIn2 :: Text -> Text -> Maybe (Text, Text)
 splitIn2 s t = case splitOn s t of
@@ -43,34 +38,48 @@ desugarNoJson :: [Text] -> Maybe Value
 desugarNoJson = 
   fmap (object . (fmap (second String))) . traverse (splitIn2 "=")
 
+decodeText :: Text -> Maybe Value
+decodeText = decode . fromStrict . encodeUtf8
+
+desugar :: [Text] -> Maybe Value
+desugar = \case
+  [arg] ->
+    case decodeText arg of
+      Just value -> Just value
+      Nothing -> desugarNoJson [arg]
+  args ->
+    desugarNoJson args
+
 exit :: Text -> IO a
 exit text = die $ unpack ("Error: " <> text) 
 
+-- TODO: switch to getArgs from unix package?
+getArgsText :: IO [Text]
+getArgsText = fmap pack <$> getArgs
+
 run :: IO ()
 run = do
-  args <- getArgsText
-  (cmd, cmdArgs) <- case args of
+  programArgs <- getArgsText
+  (cmd, cmdArgs) <- case programArgs of
     [] -> exit "No command specified"
-    [_] -> exit "No arguments specified" 
     cmd:cmdArgs -> pure (cmd, cmdArgs)
-  result <- runInterpreter $ do
-    setImports ["Data.Aeson"]
-    set [languageExtensions := [DeriveGeneric, DeriveAnyClass]]
-
-    -- TODO: support alternative module names
-    loadModules ["Hakefile"]
-    setTopLevelModules ["Hakefile"]    
-    interpretCommand cmd
-
+  -- TODO: support alternative module names
+  result <- interpretCommand cmd cmdArgs "Hakefile"
   case result of
-    Left (WontCompile errs) -> do
-      putStrLn $ "Errors in evaluated module(s):"
-      traverse_ (putStrLn . errMsg) errs -- TODO: why are errors duplicated?
-    Left err -> exit $ pack $ show err
-    Right runCmd -> do
-      decodedArg <- case desugar cmdArgs of
+    Left err ->
+      case err of
+        WontCompile errs -> do
+          putStrLn $ "Errors in evaluated module(s):"
+          traverse_ (putStrLn . errMsg) errs -- TODO: why are errors duplicated?
+        otherError -> exit $ pack $ show otherError
+    Right command -> do
+      desugaredArgs <- case desugar cmdArgs of
         Nothing -> exit "Invalid argument syntax"
         Just a -> pure a
-      case runCmd decodedArg of
-        Error str -> exit $ pack str
-        Success action -> action
+      case command of
+        NoArgs c -> c
+        WithArgs runC ->
+          case runC desugaredArgs of 
+            Error str -> exit $ pack str
+            Success action -> action
+

@@ -26,6 +26,9 @@ data Deploy =
     version :: Version
   } deriving (Generic, FromJSON, Show)
 
+prepare :: IO ()
+prepare = callCommand "echo preparing"
+
 deploy :: Deploy -> IO ()
 deploy cmd = do
   callCommand $ "echo deploying: " <> show cmd
