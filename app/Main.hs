@@ -2,30 +2,61 @@ import Hake
 
 import Data.Text (Text, pack, unpack)
 import Language.Haskell.Interpreter (InterpreterError(..), runInterpreter, errMsg)
-import System.Environment (getArgs)
-import System.Exit (die)
+import System.Exit (die, exitWith, ExitCode(..))
 import Data.Foldable (traverse_)
+import Options.Applicative
 
 exit :: Text -> IO a
 exit text = die $ unpack ("Error: " <> text) 
 
--- TODO: switch to getArgs from unix package?
-getArgsText :: IO [Text]
-getArgsText = fmap pack <$> getArgs
+commandOption :: Parser Text
+commandOption =
+  strArgument $
+    metavar "COMMAND"
+    <> help "Command to run"
+
+argumentOption :: Parser Text
+argumentOption =
+  strArgument $
+    metavar "ARGUMENT"
+      <> help "Argument to the command"
+
+moduleOption :: Parser Text
+moduleOption = 
+  strOption $
+    long "module"
+    <> short 'm'
+    <> metavar "MODULE"
+    <> help "Module to run"
+
+emptyTo :: a -> [a] -> [a]
+emptyTo def = \case
+  [] -> [def]
+  l -> l
+
+invocationParser :: Parser Invocation
+invocationParser =
+  Invocation 
+    <$> commandOption
+    <*> many argumentOption
+    <*> (emptyTo "Hakefile" <$> many moduleOption)
+
+opts :: ParserInfo Invocation
+opts = info (invocationParser <**> helper)
+  ( fullDesc
+  <> progDesc "Run functions in Haskell modules" )
 
 main :: IO ()
 main = do
-  programArgs <- getArgsText
-  (cmd, cmdArgs) <- case programArgs of
-    [] -> exit "No command specified"
-    cmd:cmdArgs -> pure (cmd, cmdArgs)
-  result <- runInterpreter $ runCommand (Invocation cmd cmdArgs ["Hakefile"])
+  invocation <- execParser opts
+  result <- runInterpreter $ runCommand invocation
   case result of
     Left err -> 
       case err of
         WontCompile errs -> do
           putStrLn $ "Errors in evaluated module(s):"
           traverse_ (putStrLn . errMsg) errs -- TODO: why are errors duplicated?
+          exitWith $ ExitFailure 1
         otherError -> exit $ pack $ show otherError
     Right (Left err) ->
       case err of

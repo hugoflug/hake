@@ -16,7 +16,6 @@ dependencies:
   - aeson
   - bytestring
   - hint
-  - mtl
   - text
 
 library:
@@ -28,6 +27,7 @@ executables:
     source-dirs:         app
     dependencies:
       - hake
+      - optparse-applicative
     ghc-options: 
       - -threaded
       - -rtsopts

@@ -18,7 +18,7 @@ data Command =
   NoArgs (IO ()) |
   WithArgs (Value -> Result (IO ()))
 
-data HakeError =
+data InvocationError =
   InvalidArgumentSyntax |
   InvalidArguments Text
   deriving Show 
@@ -58,7 +58,7 @@ desugar = \case
   args ->
     desugarNoJson args
 
-runCommand :: MonadInterpreter m => Invocation -> m (Either HakeError (IO ()))
+runCommand :: MonadInterpreter m => Invocation -> m (Either InvocationError (IO ()))
 runCommand invocation = do
   command <- interpretCommand invocation
   pure $ case desugar (cmdArgs invocation) of
