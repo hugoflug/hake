@@ -41,9 +41,7 @@ deploy cmd = do
 ```
 This Hakefile defines a single command, `deploy`.
 
-To define a command, just define a top-level function with a single argument, which must be an instance of `FromJSON`.
-
-`DeriveGeneric` and `DeriveAnyClass` are available in Hakefiles, so a default `FromJSON` can be derived by just adding `deriving (Generic, FromJSON)` to your data type. If custom JSON deserialization is desired, just define a manual instance of `FromJSON`.
+To define a command, just define a top-level value, with the type signature being either `IO ()` (for a no-argument command), or `x -> IO ()`, where `x` must be an instance of `FromJSON`.
 
 Commands in the Hakefile can now be called using JSON syntax:
 
@@ -73,16 +71,14 @@ Error: The key "EuProd" was not found
 
 Hakefiles are just Haskell, so other Haskell modules can be imported and used.
 
+`DeriveGeneric` and `DeriveAnyClass` are available in Hakefiles, so a default `FromJSON` can be derived by just adding `deriving (Generic, FromJSON)` to your data type. If custom JSON deserialization is desired, just define a manual instance of `FromJSON`.
+
 ## Caveats
 
 GHC must be installed to run `hake`, and Aeson must be available on `GHC_PACKAGE_PATH`.
 
 Any other external libraries used in your Hakefile must also be available on `GHC_PACKAGE_PATH`.
 
-Hakefiles currently must use the module name "Hakefile", so Hakefiles can't import other Hakefiles.
-
 ## TODO
-
-- No-argument commands
-- Specifying custom Haskell module names (e.g. `hake -m MyModule somecommand`)
 - Extend sugared syntax (Supporting Int/Bools and non-records)
+- Better error messages
