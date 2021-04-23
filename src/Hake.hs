@@ -1,33 +1,41 @@
 module Hake where
 
 import Language.Haskell.Interpreter
-import System.Environment (getArgs)
-import System.Exit (die)
 import Data.Aeson (Result(..), Value(..), decode, object)
 import Data.Bifunctor (second)
 import Data.ByteString.Lazy (fromStrict)
-import Data.Foldable (traverse_)
 import Data.Text (Text, unpack, pack, splitOn)
 import Data.Text.Encoding (encodeUtf8)
 import Data.Typeable (Typeable)
+
+data Invocation = Invocation {
+  cmdName :: Text,
+  cmdArgs :: [Text],
+  modules :: [Text]
+} deriving (Eq, Show)
 
 data Command =
   NoArgs (IO ()) |
   WithArgs (Value -> Result (IO ()))
 
+data HakeError =
+  InvalidArgumentSyntax |
+  InvalidArguments Text
+  deriving Show 
+
 interpretText :: (MonadInterpreter m, Typeable a) => Text -> a -> m a
 interpretText t w = interpret (unpack t) w
 
-interpretCommand :: Text -> [Text] -> Text -> IO (Either InterpreterError Command)
-interpretCommand cmd args moduleName = runInterpreter $ do
+interpretCommand :: MonadInterpreter m => Invocation -> m Command
+interpretCommand Invocation{cmdName, cmdArgs, modules} = do
   setImports ["Data.Aeson"]
   set [languageExtensions := [DeriveGeneric, DeriveAnyClass]]
 
-  loadModules [unpack moduleName]
-  setTopLevelModules [unpack moduleName] 
-  case args of
-    [] -> NoArgs <$> interpretText cmd infer
-    _ -> WithArgs <$> interpretText ("fmap " <> cmd <> ". fromJSON") infer
+  loadModules $ unpack <$> modules
+  setTopLevelModules $ unpack <$> modules
+  case cmdArgs of
+    [] -> NoArgs <$> interpretText cmdName infer
+    _ -> WithArgs <$> interpretText ("fmap " <> cmdName <> ". fromJSON") infer
 
 splitIn2 :: Text -> Text -> Maybe (Text, Text)
 splitIn2 s t = case splitOn s t of
@@ -50,36 +58,15 @@ desugar = \case
   args ->
     desugarNoJson args
 
-exit :: Text -> IO a
-exit text = die $ unpack ("Error: " <> text) 
-
--- TODO: switch to getArgs from unix package?
-getArgsText :: IO [Text]
-getArgsText = fmap pack <$> getArgs
-
-run :: IO ()
-run = do
-  programArgs <- getArgsText
-  (cmd, cmdArgs) <- case programArgs of
-    [] -> exit "No command specified"
-    cmd:cmdArgs -> pure (cmd, cmdArgs)
-  -- TODO: support alternative module names
-  result <- interpretCommand cmd cmdArgs "Hakefile"
-  case result of
-    Left err ->
-      case err of
-        WontCompile errs -> do
-          putStrLn $ "Errors in evaluated module(s):"
-          traverse_ (putStrLn . errMsg) errs -- TODO: why are errors duplicated?
-        otherError -> exit $ pack $ show otherError
-    Right command -> do
-      desugaredArgs <- case desugar cmdArgs of
-        Nothing -> exit "Invalid argument syntax"
-        Just a -> pure a
+runCommand :: MonadInterpreter m => Invocation -> m (Either HakeError (IO ()))
+runCommand invocation = do
+  command <- interpretCommand invocation
+  pure $ case desugar (cmdArgs invocation) of
+    Nothing -> Left InvalidArgumentSyntax
+    Just desugaredArgs ->
       case command of
-        NoArgs c -> c
-        WithArgs runC ->
-          case runC desugaredArgs of 
-            Error str -> exit $ pack str
-            Success action -> action
-
+        NoArgs cmd -> Right cmd
+        WithArgs runCmd ->
+          case runCmd desugaredArgs of 
+            Error str -> Left $ InvalidArguments $ pack str
+            Success action -> Right action
